@@ -1,0 +1,23 @@
+{
+    "manifest_version": 3,
+    "name": "Chat Eye MVP",
+    "version": "1.0",
+    "background": {
+        "service_worker": "background.js"
+    },
+    "permissions": [
+        "sidePanel",
+        "tabs",
+        "activeTab"
+    ],
+    "host_permissions": [
+        "https://*.tradingview.com/*",
+        "<all_urls>"
+    ],
+    "side_panel": {
+        "default_path": "sidepanel.html"
+    },
+    "action": {
+        "default_title": "Open Chat Eye"
+    }
+}
