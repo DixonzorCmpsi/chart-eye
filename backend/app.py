@@ -150,25 +150,37 @@ STEP 1: OBSERVE WHAT YOU SEE
 - What are the LAST 3-5 candles telling you?
 - Are there clear support/resistance levels?
 
-STEP 2: IDENTIFY KEY ZONES
-- Where is price relative to major support/resistance?
-- Is there a trend or is price in a range?
-- Where would buyers step in? Where would sellers defend?
-- Any confluences (multiple levels at same area)?
+STEP 2: CHECK FOR LIQUIDITY SWEEPS
+Liquidity sweeps = wicks that breach recent support/resistance then reverse sharply:
+- Look for WICKS that extend 1.5x+ the candle body
+- Do wicks penetrate recent support/resistance by 0.5-2%?
+- Does the candle close 50%+ AWAY from the wick (showing strong reversal)?
+- Are 1-3 follow-through candles confirming the reversal direction?
+- This exhausts trapped stops and shows reversal conviction
+- POWERFUL SIGNAL if sweep happens at confluence (previous high/low + current support/resistance)
 
-STEP 3: ANALYZE MOMENTUM & STRUCTURE
+STEP 3: IDENTIFY REVERSALS & STRUCTURE BREAKS
+Reversal indicators:
+- CANDLESTICK PATTERNS: Engulfing (large opposite body engulfs small), Pinbar (long wick + small body), Hammer/Shooting Star
+- STRUCTURE BREAK: Uptrend was making higher lows → now makes LOWER low = bearish. Downtrend was making lower highs → now makes HIGHER high = bullish
+- VOLUME SHIFT: Reversal candles on HIGHER volume than trend candles = confirms strength
+- FOLLOW-THROUGH: 2-3 candles after pattern continue in new direction (NOT a false reversal)
+- REJECTED WICKS: Long wicks in opposite direction of reversal show extreme rejection at key level
+
+STEP 4: ANALYZE MOMENTUM & CONFLUENCE
 - Is the current move strong or weak?
 - Are candles getting bigger or smaller?
 - Wick behavior - are rejections happening?
-- Any emerging patterns (break, test, reversal)?
+- KEY QUESTION: Do you see BOTH a liquidity sweep AND a reversal candle/pattern at the same level? = HIGHEST CONVICTION
+- Does price have confluence (sweep + reversal pattern + structure break + volume + previous swing zone)? = Trade Setup Ready
 
-STEP 4: DECIDE ON YOUR TRADE ACTION
-Choose ONE of:
-- BUY LONG (if support is holding + momentum looks bullish)
-- SELL SHORT (if resistance is holding + momentum looks bearish)
-- WAIT (if unclear direction or consolidating)
+STEP 5: DECIDE ON YOUR TRADE ACTION
+Based on sweeps, reversals, and confluence, choose ONE of:
+- BUY LONG (if liquidity sweep at support + bullish reversal candle + structure break (lower low reversed) + volume increase + follow-through)
+- SELL SHORT (if liquidity sweep at resistance + bearish reversal candle + structure break (higher high reversed) + volume increase + follow-through)
+- WAIT (if no clear sweep/reversal, no structure break, or consolidating without confluence)
 
-STEP 5: INFORMATION GAPS
+STEP 6: INFORMATION GAPS
 Ask for wider view, zoom in, or different context if needed?
 
 ---
@@ -176,26 +188,30 @@ Ask for wider view, zoom in, or different context if needed?
 OUTPUT FORMAT REQUIRED - EXACTLY THIS STRUCTURE:
 
 **VERDICT: [BUY LONG / SELL SHORT / WAIT] | Confidence: [HIGH / MEDIUM / LOW]**
-[2-3 sentences of reasoning. Include: what price action confirms this? where's the entry/stop? what's the target? what could invalidate?]
+[2-3 sentences of reasoning. Include: what price action confirms this? (sweep/reversal) where's the entry/stop? what's the target? what could invalidate?]
 
 ---
 
 Example outputs:
 
 ✓ "**VERDICT: BUY LONG | Confidence: HIGH**
-Support held strong with increasing buy volume. I'd enter long here, stop loss below support at 6,750, targeting resistance at 6,795. If price breaks below support on volume, this setup is invalidated."
+Price swept below support taking stops, then reversed hard with strong follow-through—textbook liquidity grab. Entry: above the reversal candle, stop below the sweep wick at 6,750, target resistance at 6,795. Invalidated if price closes back below support."
 
-✓ "**VERDICT: SELL SHORT | Confidence: MEDIUM**
-Price rejected resistance twice with declining volume. I'd sell on next relief bounce back to the resistance line, stop above the recent high. Watch for breakdown below support to confirm acceleration lower."
+✓ "**VERDICT: SELL SHORT | Confidence: HIGH**
+Structure broke higher into resistance, formed a pinbar rejection candle, and swept above previous high grabbing longs—now reversing sharply. I'd enter on this reversal, stop above the sweep wick, targeting the support below. If support holds and rallies again, this setup fails."
 
-✓ "**VERDICT: WAIT | Confidence: HIGH**
-Price is consolidating with unclear direction—candles are small and indecisive. I'd wait for a clean break of either support or resistance on volume. Can you show a wider view to see the bigger trend context?"
+✓ "**VERDICT: WAIT | Confidence: MEDIUM**
+No clear liquidity sweep or reversal pattern yet—candles are indecisive with small bodies. I'd watch for either a clean sweep at the current zone or a structure break. Can you show me the last 10 candles to see if there's an emerging higher low or lower high?"
+
+✓ "**VERDICT: BUY LONG | Confidence: MEDIUM**
+Downtrend was making lower highs, just broke the structure with a higher high + engulfing reversal candle at support. Sweep looks partial—need to confirm follow-through. Entry: above this candle, stop below support, target the resistance above. If it fails to hold above the break, invalidated."
 
 Bad outputs (don't do these):
 ✗ "Price might bounce" (no verdict)
-✗ "I see some candles" (not analytical)
-✗ "Here are 5 reasons..." (too long)
-✗ No confidence level given"""
+✗ "I see candles" (not analytical)
+✗ No mention of sweeps, reversals, or structure breaks
+✗ No entry/stop/target specified
+✗ "Here are 5 reasons..." (too long)"""
 
 def parse_verdict_response(raw: str) -> tuple[str, str, str, str]:
     """
