@@ -58,15 +58,56 @@ app.add_middleware(
 # ============================================================
 #  SCHEMAS
 # ============================================================
+class ConversationMessage(BaseModel):
+    role: str  # 'user' or 'ai'
+    query: str
+    verdict: str = ""
+    reasoning: str = ""
+
 class InferenceRequest(BaseModel):
     image: str
     query: str
 
 class AnalyzeRequest(BaseModel):
-    image:     str
-    query:     str
+    image:    str
+    query:    str
     iteration: int = 0
-    context:   str = ""
+    context:  str = ""
+    history:  list[ConversationMessage] = []  # Conversation memory
+
+
+# ============================================================
+#  CONVERSATION MEMORY (in-memory store)
+# ============================================================
+conversation_history: list[ConversationMessage] = []
+
+def add_to_history(role: str, query: str, verdict: str = "", reasoning: str = ""):
+    """Add a message to conversation history"""
+    msg = ConversationMessage(role=role, query=query, verdict=verdict, reasoning=reasoning)
+    conversation_history.append(msg)
+    logger.info(f"[history] Added {role} message: {query[:50]}")
+
+def get_history_context() -> str:
+    """Build context string from recent conversation"""
+    if not conversation_history:
+        return ""
+    
+    recent = conversation_history[-5:]  # Last 5 messages
+    history_text = "RECENT CONVERSATION CONTEXT:\n"
+    
+    for msg in recent:
+        if msg.role == 'user':
+            history_text += f"- You asked: {msg.query}\n"
+        else:
+            history_text += f"- Chart Eye said: {msg.verdict}: {msg.reasoning[:100]}...\n"
+    
+    return history_text + "\n"
+
+def clear_history():
+    """Clear conversation history (for testing or fresh start)"""
+    global conversation_history
+    conversation_history = []
+    logger.info("[history] Conversation history cleared")
 
 
 # ============================================================
@@ -140,7 +181,14 @@ def detect_chart_region(base64_image: str) -> str:
 # ============================================================
 COACH_PROMPT = """You are an expert trading analyst with deep reasoning skills. Your job is to analyze the chart and give a CLEAR TRADE VERDICT with reasoning.
 
-User asks: "{query}"
+{history_context}User asks: "{query}"
+
+IMPORTANT CONTEXT NOTES:
+- Remember previous trades and levels discussed in this conversation
+- Look for patterns and confirmations from prior analysis
+- If user asks about "the bounce" or "that level," they're referring to recent context - use it to inform your analysis
+- Build on previous verdicts - don't contradict them unless price action clearly changes
+- Reference what was previously identified (support at X, resistance at Y, etc.) to show continuity
 
 INTERNAL REASONING (Think through this but don't show it):
 
@@ -149,6 +197,7 @@ STEP 1: OBSERVE WHAT YOU SEE
 - Current price action? (up/down/consolidating? strong/weak?)
 - What are the LAST 3-5 candles telling you?
 - Are there clear support/resistance levels?
+- How does this relate to what we discussed before?
 
 STEP 2: CHECK FOR LIQUIDITY SWEEPS
 Liquidity sweeps = wicks that breach recent support/resistance then reverse sharply:
@@ -259,7 +308,11 @@ def parse_verdict_response(raw: str) -> tuple[str, str, str, str]:
 
 
 def coach_analysis(base64_image: str, query: str) -> dict:
-    prompt = COACH_PROMPT.format(query=query)
+    # Get conversation history context
+    history_context = get_history_context()
+    
+    # Format prompt with history
+    prompt = COACH_PROMPT.format(history_context=history_context, query=query)
     
     if not base64_image or len(base64_image) < 100:
         logger.error(f"[coach] Invalid image: too short ({len(base64_image) if base64_image else 0} bytes)")
@@ -300,6 +353,9 @@ def coach_analysis(base64_image: str, query: str) -> dict:
 
     # Parse the verdict response to extract structured data
     coaching_advice, verdict_type, confidence, call_to_action = parse_verdict_response(raw)
+    
+    # Add to conversation history
+    add_to_history(role="ai", query=query, verdict=verdict_type, reasoning=coaching_advice)
     
     return {
         "coach_commentary": coaching_advice,
@@ -348,6 +404,10 @@ async def analyze(request: AnalyzeRequest):
     logger.info(f"[/analyze] iter={request.iteration} q={request.query[:50]!r} ctx={request.context!r}")
 
     try:
+        # Add user query to history on first iteration
+        if request.iteration == 0:
+            add_to_history(role="user", query=request.query)
+        
         if request.iteration == 0:
             try:
                 region_name = detect_chart_region(request.image)
