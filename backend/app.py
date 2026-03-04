@@ -88,20 +88,28 @@ def add_to_history(role: str, query: str, verdict: str = "", reasoning: str = ""
     logger.info(f"[history] Added {role} message: {query[:50]}")
 
 def get_history_context() -> str:
-    """Build context string from recent conversation"""
+    """Build prominent context string from recent conversation"""
     if not conversation_history:
         return ""
     
-    recent = conversation_history[-5:]  # Last 5 messages
-    history_text = "RECENT CONVERSATION CONTEXT:\n"
+    recent = conversation_history[-6:]  # Last 6 messages for more context
+    history_text = "\n" + "="*70 + "\n"
+    history_text += "⚡ THIS CONVERSATION'S TRADING CONTEXT (REFERENCE THIS!):\n"
+    history_text += "="*70 + "\n"
     
-    for msg in recent:
+    for i, msg in enumerate(recent, 1):
         if msg.role == 'user':
-            history_text += f"- You asked: {msg.query}\n"
+            history_text += f"\n[Message {i}] YOU ASKED: {msg.query}\n"
         else:
-            history_text += f"- Chart Eye said: {msg.verdict}: {msg.reasoning[:100]}...\n"
+            history_text += f"[Message {i}] CHART EYE SAID: **{msg.verdict}** (Confidence: check your last verdict)\n"
+            history_text += f"   Reasoning: {msg.reasoning[:150]}...\n"
     
-    return history_text + "\n"
+    history_text += "\n" + "="*70 + "\n"
+    history_text += "CRITICAL: Your prior trade verdict was set. Check if price action CONFIRMS or INVALIDATES it.\n"
+    history_text += "If context is relevant to this query, EXPLICITLY reference previous levels/verdicts.\n"
+    history_text += "="*70 + "\n\n"
+    
+    return history_text
 
 def clear_history():
     """Clear conversation history (for testing or fresh start)"""
@@ -179,20 +187,40 @@ def detect_chart_region(base64_image: str) -> str:
 #  Uses openai_client (DefaultAzureCredential) + JSON mode.
 #  BAML handles schema definition and pydantic validation.
 # ============================================================
-COACH_PROMPT = """You are an expert trading analyst with deep reasoning skills. Your job is to analyze the chart and give a CLEAR TRADE VERDICT with reasoning.
+COACH_PROMPT = """You are an expert trading analyst having a CONTINUOUS CONVERSATION with a trader. Your job is to build on prior discussion, not restart from scratch.
 
-{history_context}User asks: "{query}"
+{history_context}User asks now: "{query}"
 
-IMPORTANT CONTEXT NOTES:
-- Remember previous trades and levels discussed in this conversation
-- Look for patterns and confirmations from prior analysis
-- If user asks about "the bounce" or "that level," they're referring to recent context - use it to inform your analysis
-- Build on previous verdicts - don't contradict them unless price action clearly changes
-- Reference what was previously identified (support at X, resistance at Y, etc.) to show continuity
+================================================================================
+YOUR CRITICAL CONVERSATION RULES:
+================================================================================
+IF THIS IS A FOLLOW-UP QUESTION (user asking about trade already discussed):
+→ EXPLICITLY reference what you said before (entry, stop, target, verdict)
+→ CHECK if current price action CONFIRMS or INVALIDATES your prior verdict
+→ Give an UPDATE on the trade status - don't give a disconnected new verdict
+→ Say "Your short is STILL VALID because..." OR "Your short is INVALIDATED because..."
+
+IF USER ASKS "AM I GOOD ON THE SHORT?" or "IS THIS TRADE WORKING?":
+→ Reference the EXACT entry/stop/target you gave
+→ Point out what's happening NOW vs. what you predicted
+→ Say "YES, this confirms the thesis..." or "NO, price action has changed..."
+→ Build narrative continuity - acknowledge the prior trade
+
+AVOID AT ALL COSTS:
+- Treating each query as fresh/disconnected analysis
+- Saying "WAIT" if you just predicted "SELL SHORT" without explaining price invalidated it
+- Failing to mention entry points, stops, targets from previous verdicts
+- Contradicting yourself without explanation
 
 INTERNAL REASONING (Think through this but don't show it):
 
-STEP 1: OBSERVE WHAT YOU SEE
+STEP 1: CHECK PRIOR CONTEXT FIRST
+- Review the conversation history above
+- Is user asking about trade already discussed? Reference it explicitly
+- Did you give prior entry/stop/target? Keep that frame
+- Did price action confirm or break your thesis?
+
+STEP 2: OBSERVE WHAT YOU SEE
 - Chart style/timeframe clues? (candle size, pattern frequency, zoom level)
 - Current price action? (up/down/consolidating? strong/weak?)
 - What are the LAST 3-5 candles telling you?
@@ -216,51 +244,56 @@ Reversal indicators:
 - FOLLOW-THROUGH: 2-3 candles after pattern continue in new direction (NOT a false reversal)
 - REJECTED WICKS: Long wicks in opposite direction of reversal show extreme rejection at key level
 
-STEP 4: ANALYZE MOMENTUM & CONFLUENCE
-- Is the current move strong or weak?
-- Are candles getting bigger or smaller?
-- Wick behavior - are rejections happening?
-- KEY QUESTION: Do you see BOTH a liquidity sweep AND a reversal candle/pattern at the same level? = HIGHEST CONVICTION
-- Does price have confluence (sweep + reversal pattern + structure break + volume + previous swing zone)? = Trade Setup Ready
+STEP 5: CONFIRM OR INVALIDATE PRIOR THESIS
+- If you gave a SELL SHORT/BUY LONG verdict before: is it still valid? Point out what confirms it
+- Or has price invalidated it? Exactly what changed? (e.g., "broke above resistance" or "lower lows no longer forming")
+- Build narrative continuity - connect current price to your prior prediction
 
-STEP 5: DECIDE ON YOUR TRADE ACTION
-Based on sweeps, reversals, and confluence, choose ONE of:
-- BUY LONG (if liquidity sweep at support + bullish reversal candle + structure break (lower low reversed) + volume increase + follow-through)
-- SELL SHORT (if liquidity sweep at resistance + bearish reversal candle + structure break (higher high reversed) + volume increase + follow-through)
-- WAIT (if no clear sweep/reversal, no structure break, or consolidating without confluence)
+STEP 6: DECIDE ON YOUR ACTION (Reference Prior Trade)
+Choose the verdict that builds on context:
+- CONFIRM SHORT/LONG (prior thesis still valid, show why)
+- UPDATE SHORT/LONG - NOW HIGHER RISK (thesis at risk due to new price action)
+- INVALIDATE SHORT/LONG (thesis broken, exit or flip)
+- BUY LONG (if no prior verdict)
+- SELL SHORT (if no prior verdict)
+- WAIT (if unclear or change needed)
 
-STEP 6: INFORMATION GAPS
-Ask for wider view, zoom in, or different context if needed?
+STEP 7: INFORMATION GAPS
+Ask for wider view or different context if needed?
 
----
+================================================================================
+OUTPUT FORMAT - ALWAYS ACKNOWLEDGE PRIOR VERDICTS:
+================================================================================
 
-OUTPUT FORMAT REQUIRED - EXACTLY THIS STRUCTURE:
+**VERDICT: [CONFIRM SHORT/LONG | UPDATE SHORT/LONG | INVALIDATE SHORT/LONG] | Confidence: [HIGH/MEDIUM/LOW]**
+[2-3 sentences: reference prior entry/stop/target and explain current status]
 
-**VERDICT: [BUY LONG / SELL SHORT / WAIT] | Confidence: [HIGH / MEDIUM / LOW]**
-[2-3 sentences of reasoning. Include: what price action confirms this? (sweep/reversal) where's the entry/stop? what's the target? what could invalidate?]
+================================================================================
+GOOD RESPONSES:
+================================================================================
 
----
+✓ "**VERDICT: CONFIRM SHORT | Confidence: HIGH**
+Your short at 6,781 is STILL VALID—price just tested support exactly where predicted, no reversal yet. Bounced slightly but still under the sweep wick. Keep your stop at 6,783 and watch for target—this confirms the thesis."
 
-Example outputs:
+✓ "**VERDICT: UPDATE SHORT - NOW HIGHER RISK | Confidence: MEDIUM**
+Your short is holding but getting squeezed. We just got a strong green engulfing that took out lower high structure. If this closes above 6,785 + volume, your SHORT IS INVALIDATED. Recommend tightening stop or taking half profits."
 
-✓ "**VERDICT: BUY LONG | Confidence: HIGH**
-Price swept below support taking stops, then reversed hard with strong follow-through—textbook liquidity grab. Entry: above the reversal candle, stop below the sweep wick at 6,750, target resistance at 6,795. Invalidated if price closes back below support."
+✓ "**VERDICT: INVALIDATE SHORT - FLIP TO WAIT | Confidence: HIGH**
+Your SHORT thesis is BROKEN—price just swept below support, reversed hard with pinbar rejection, and is now showing HIGHER lows. The prior lower lows support is gone. Exit the short. NEW: Don't trade until structure clarifies."
 
 ✓ "**VERDICT: SELL SHORT | Confidence: HIGH**
-Structure broke higher into resistance, formed a pinbar rejection candle, and swept above previous high grabbing longs—now reversing sharply. I'd enter on this reversal, stop above the sweep wick, targeting the support below. If support holds and rallies again, this setup fails."
+New setup (not referencing prior trade). Price swept above resistance taking stops, then formed strong rejection candle. Entry around current price, stop above sweep wick at 6,783, target lower support. This is a fresh entry—different from prior trades."
 
-✓ "**VERDICT: WAIT | Confidence: MEDIUM**
-No clear liquidity sweep or reversal pattern yet—candles are indecisive with small bodies. I'd watch for either a clean sweep at the current zone or a structure break. Can you show me the last 10 candles to see if there's an emerging higher low or lower high?"
+================================================================================
+BAD RESPONSES (DON'T DO THESE):
+================================================================================
 
-✓ "**VERDICT: BUY LONG | Confidence: MEDIUM**
-Downtrend was making lower highs, just broke the structure with a higher high + engulfing reversal candle at support. Sweep looks partial—need to confirm follow-through. Entry: above this candle, stop below support, target the resistance above. If it fails to hold above the break, invalidated."
-
-Bad outputs (don't do these):
-✗ "Price might bounce" (no verdict)
-✗ "I see candles" (not analytical)
-✗ No mention of sweeps, reversals, or structure breaks
-✗ No entry/stop/target specified
-✗ "Here are 5 reasons..." (too long)"""
+✗ "WAIT | Confidence: MEDIUM" after saying SELL SHORT (wrong - doesn't acknowledge prior trade!)
+✗ "BUY LONG" without explaining why SHORT thesis changed (confusing)
+✗ Not mentioning entry/stop/target from prior verdict (user can't track)
+✗ Acting like price appears brand new (disconnect from conversation)
+✗ Multiple disconnected scenarios listed (confusing - be action-oriented)
+✗ "Price might bounce" with no verdict (vague)"""
 
 def parse_verdict_response(raw: str) -> tuple[str, str, str, str]:
     """
@@ -279,7 +312,20 @@ def parse_verdict_response(raw: str) -> tuple[str, str, str, str]:
     verdict_type = "WAIT"
     confidence = "MEDIUM"
     
-    if "BUY LONG" in verdict_line.upper():
+    # Check for confirmation/update/invalidation verdicts first (for follow-ups)
+    if "CONFIRM SHORT" in verdict_line.upper():
+        verdict_type = "CONFIRM SHORT"
+    elif "CONFIRM LONG" in verdict_line.upper():
+        verdict_type = "CONFIRM LONG"
+    elif "UPDATE SHORT" in verdict_line.upper():
+        verdict_type = "UPDATE SHORT"
+    elif "UPDATE LONG" in verdict_line.upper():
+        verdict_type = "UPDATE LONG"
+    elif "INVALIDATE SHORT" in verdict_line.upper():
+        verdict_type = "INVALIDATE SHORT"
+    elif "INVALIDATE LONG" in verdict_line.upper():
+        verdict_type = "INVALIDATE LONG"
+    elif "BUY LONG" in verdict_line.upper():
         verdict_type = "BUY LONG"
     elif "SELL SHORT" in verdict_line.upper():
         verdict_type = "SELL SHORT"
@@ -297,6 +343,12 @@ def parse_verdict_response(raw: str) -> tuple[str, str, str, str]:
     cta_map = {
         "BUY LONG": "What position size are you considering? Any questions on entry or stop loss?",
         "SELL SHORT": "Are you comfortable with the risk/reward on this short? Want to adjust stops?",
+        "CONFIRM SHORT": "Your thesis is intact. When do you plan to take profits or adjust stops?",
+        "CONFIRM LONG": "Great - the trade is confirming. Any questions about your targets or risk management?",
+        "UPDATE SHORT": "Position getting squeezed. What's your plan - tighten stops, take profits, or hold?",
+        "UPDATE LONG": "Position at risk - want to discuss revised stops or exit strategy?",
+        "INVALIDATE SHORT": "The short thesis is broken. Ready to exit and look for a new setup?",
+        "INVALIDATE LONG": "The long thesis is broken. Let's find a new opportunity.",
         "WAIT": "Want me to analyze a different timeframe or zoomed-out view?"
     }
     call_to_action = cta_map.get(verdict_type, "What would you like to explore next?")
